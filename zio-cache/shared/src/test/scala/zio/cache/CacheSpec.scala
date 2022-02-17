@@ -4,6 +4,7 @@ import zio._
 import zio.duration._
 import zio.test.Assertion._
 import zio.test._
+import zio.test.environment.TestClock
 
 object CacheSpec extends DefaultRunnableSpec {
 
@@ -143,6 +144,22 @@ object CacheSpec extends DefaultRunnableSpec {
           size  <- cache.size
         } yield assertTrue(size == 10)
       }
-    }
+    },
+    suite("expiration")(testM("should refresh entry from expiration time is passed") {
+      for {
+        ref     <- ZRef.make(1)
+        cache   <- Cache.make(10, 30.minutes, Lookup((_: Int) => ref.updateAndGet(_ + 1)))
+        actual1 <- cache.get(1)
+        actual2 <- cache.get(1)
+        _       <- TestClock.adjust(31.minutes)
+        actual3 <- cache.get(1)
+        actual4 <- cache.get(1)
+        size1   <- cache.size
+      } yield assert(actual1)(equalTo(2)) &&
+        assert(actual2)(equalTo(2)) &&
+        assert(actual3)(equalTo(3)) &&
+        assert(actual4)(equalTo(3)) &&
+        assert(size1)(equalTo(1))
+    })
   )
 }
